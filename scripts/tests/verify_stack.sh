@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Reset volumes, start Postgres + Mongo, seed from Hugging Face, run sample queries.
-# Usage: bash scripts/verify_stack.sh   (from repo root)
+# Usage: bash scripts/tests/verify_stack.sh   (from repo root)
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 if ! docker info >/dev/null 2>&1; then

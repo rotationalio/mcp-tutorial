@@ -28,4 +28,11 @@ docker compose up --build
 
 Optional: copy [.env.example](.env.example) to `.env` to override ports or `HF_DATASET_REPO` / `HF_DATASET_REVISION`.
 
+After changing `scripts/seed_databases.py`, rebuild the seed image when running seed manually: `docker compose run --build --rm seed`.
+
+**Scripts** (run from repo root):
+
+- `bash scripts/tests/verify_stack.sh` — `docker compose down -v`, start DBs, seed, print sample queries.
+- `bash scripts/tests/test_databases.sh` — sample Postgres and Mongo queries (expects stack up and already seeded).
+
 Schema and init scripts live under `db/postgres/` and `db/mongo/`; loading logic is in `scripts/seed_databases.py`.
