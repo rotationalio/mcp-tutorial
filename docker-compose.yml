@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-olympics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olympics}
+      POSTGRES_DB: ${POSTGRES_DB:-olympics}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U \"${POSTGRES_USER:-olympics}\" -d \"${POSTGRES_DB:-olympics}\"",
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+
+  mongo:
+    image: mongo:7
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./db/mongo:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 3s
+      timeout: 5s
+      retries: 15
+      start_period: 15s
+
+  seed:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.seed
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${POSTGRES_USER:-olympics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-olympics}
+      POSTGRES_DB: ${POSTGRES_DB:-olympics}
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: ${MONGO_DB:-olympics}
+      HF_DATASET_REPO: ${HF_DATASET_REPO:-SVeldman/126-years-olympic-results}
+      HF_DATASET_REVISION: ${HF_DATASET_REVISION:-main}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  postgres_data:
+  mongo_data:
