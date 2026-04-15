@@ -1,6 +1,7 @@
 """
 Download the Hugging Face dataset CSVs (no authentication) and load:
   - PostgreSQL: countries, olympic_games, athletes, athlete_events
+    (CSV has many rows per result_id; athlete_events.athlete_event_id is the row PK.)
   - MongoDB: olympic_athlete_biography, olympic_event_results
 
 Olympic_Medal_Tally_History.csv is not downloaded or loaded.
@@ -74,7 +75,7 @@ def _postgres_seeded(conn: psycopg2.extensions.connection) -> bool:
 
 def _load_countries(conn: psycopg2.extensions.connection, path: Path) -> None:
     rows: list[tuple[str, str]] = []
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             noc = (row.get("noc") or "").strip()
@@ -101,7 +102,7 @@ def _collect_country_nocs_from_games_details_bio(
 ) -> set[str]:
     nocs: set[str] = set()
     for path in (games_path, details_path, bio_path):
-        with path.open(newline="", encoding="utf-8") as f:
+        with path.open(newline="", encoding="utf-8-sig") as f:
             for row in csv.DictReader(f):
                 n = (row.get("country_noc") or "").strip()
                 if n:
@@ -129,7 +130,7 @@ def _ensure_country_placeholders(conn: psycopg2.extensions.connection, nocs: set
 
 def _load_games_summary(conn: psycopg2.extensions.connection, path: Path) -> None:
     rows: list[tuple[Any, ...]] = []
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             eid = _parse_int(row.get("edition_id"))
@@ -195,7 +196,7 @@ def _load_athletes_from_biography(conn: psycopg2.extensions.connection, path: Pa
     batch: list[tuple[Any, ...]] = []
     batch_size = 2000
     seen: set[int] = set()
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             aid = _parse_int(row.get("athlete_id"))
@@ -218,7 +219,7 @@ def _load_athletes_from_biography(conn: psycopg2.extensions.connection, path: Pa
 def _scan_event_athlete_ids_and_names(path: Path) -> tuple[set[int], dict[int, str]]:
     ids: set[int] = set()
     names: dict[int, str] = {}
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             aid = _parse_int(row.get("athlete_id"))
@@ -255,7 +256,7 @@ def _insert_athlete_stubs(
 def _load_athlete_events(conn: psycopg2.extensions.connection, path: Path) -> None:
     batch: list[tuple[Any, ...]] = []
     batch_size = 4000
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             rid = _parse_int(row.get("result_id"))
@@ -298,7 +299,6 @@ def _flush_athlete_events_batch(
                 sport, event, pos, medal, is_team_sport
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            ON CONFLICT (result_id) DO NOTHING
             """,
             batch,
             page_size=len(batch),
@@ -320,7 +320,7 @@ def _load_mongo_csv(db, collection_name: str, path: Path) -> None:
     coll = db[collection_name]
     batch: list[dict[str, Any]] = []
     batch_size = 2000
-    with path.open(newline="", encoding="utf-8") as f:
+    with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
             batch.append(_mongo_row_document(row))
