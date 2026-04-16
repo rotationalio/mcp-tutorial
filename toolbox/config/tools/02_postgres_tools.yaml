@@ -1,0 +1,145 @@
+# PostgreSQL tools (olympics-postgres).
+kind: tool
+name: pg_list_games_by_year
+type: postgres-sql
+source: olympics-postgres
+description: >
+  List Olympic Games editions in an inclusive calendar year range.
+  Returns edition_id, year, city, edition label, and host country NOC for each Games.
+  Use before mongo_event_results_by_edition when the user gives a year or city.
+parameters:
+  - name: year_min
+    type: integer
+    description: Minimum calendar year (inclusive).
+  - name: year_max
+    type: integer
+    description: Maximum calendar year (inclusive).
+statement: |
+  SELECT edition_id, year, city, edition, country_noc
+  FROM olympic_games
+  WHERE year >= $1 AND year <= $2
+  ORDER BY year ASC, edition_id ASC
+  LIMIT 200
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: pg_search_countries
+type: postgres-sql
+source: olympics-postgres
+description: >
+  Search countries by name fragment and return NOC codes (National Olympic Committee).
+  Use before medal tools when the user says e.g. "United States" instead of "USA".
+parameters:
+  - name: name_fragment
+    type: string
+    description: Substring to match against country name (case-insensitive).
+statement: |
+  SELECT noc, country
+  FROM countries
+  WHERE country ILIKE '%' || $1 || '%'
+  ORDER BY country ASC
+  LIMIT 50
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: pg_search_athletes_by_name
+type: postgres-sql
+source: olympics-postgres
+description: >
+  Search athletes by name substring. Returns athlete_id for use with pg_athlete_results
+  or mongo_athlete_biography.
+parameters:
+  - name: name_fragment
+    type: string
+    description: Substring to match against athlete full name (case-insensitive).
+statement: |
+  SELECT athlete_id, name, sex, birth_country
+  FROM athletes
+  WHERE name ILIKE '%' || $1 || '%'
+  ORDER BY name ASC
+  LIMIT 50
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: pg_medal_events_for_country
+type: postgres-sql
+source: olympics-postgres
+description: >
+  Medal-winning athlete_event rows for a country NOC and calendar year.
+  Optional sport_fragment filters sport OR event text (e.g. "running", "athletics").
+  Returns athlete_id, athlete name, medal, sport, event, year, edition label.
+  Use after pg_search_countries to resolve NOC; then use athlete_id for Mongo biographies.
+parameters:
+  - name: noc
+    type: string
+    description: National Olympic Committee code (e.g. USA, JPN).
+  - name: year
+    type: integer
+    description: Calendar year of the Olympic Games.
+  - name: sport_fragment
+    type: string
+    description: Optional substring to match sport or event name; leave empty for all sports.
+    required: false
+    default: ""
+statement: |
+  SELECT DISTINCT ON (ae.athlete_id, ae.medal, ae.sport, ae.event, g.year)
+         ae.athlete_id,
+         a.name AS athlete_name,
+         ae.medal,
+         ae.sport,
+         ae.event,
+         g.year,
+         g.edition
+  FROM athlete_events ae
+  INNER JOIN athletes a ON a.athlete_id = ae.athlete_id
+  INNER JOIN olympic_games g ON g.edition_id = ae.edition_id
+  WHERE ae.country_represented = $1
+    AND g.year = $2
+    AND ae.medal IS NOT NULL
+    AND TRIM(ae.medal) <> ''
+    AND (
+      $3::text = ''
+      OR ae.sport ILIKE '%' || $3 || '%'
+      OR ae.event ILIKE '%' || $3 || '%'
+    )
+  ORDER BY ae.athlete_id, ae.medal, ae.sport, ae.event, g.year
+  LIMIT 500
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: pg_athlete_results
+type: postgres-sql
+source: olympics-postgres
+description: >
+  Olympic participation rows for one athlete from athlete_events with Games year/city.
+  edition_id_filter 0 means all editions; otherwise filter to that edition_id.
+parameters:
+  - name: athlete_id
+    type: integer
+    description: Athlete primary key (from search or Mongo biography).
+  - name: edition_id_filter
+    type: integer
+    description: Olympic edition_id to restrict to, or 0 for all editions.
+    required: false
+    default: 0
+statement: |
+  SELECT ae.athlete_event_id, ae.result_id, ae.edition_id, ae.country_represented,
+         ae.sport, ae.event, ae.pos, ae.medal, ae.is_team_sport,
+         g.year, g.city, g.edition
+  FROM athlete_events ae
+  INNER JOIN olympic_games g ON g.edition_id = ae.edition_id
+  WHERE ae.athlete_id = $1
+    AND ($2 = 0 OR ae.edition_id = $2)
+  ORDER BY g.year DESC, ae.sport, ae.event
+  LIMIT 200
+annotations:
+  readOnlyHint: true
+  destructiveHint: false

@@ -1,0 +1,102 @@
+# MongoDB tools (olympics-mongo).
+kind: tool
+name: mongo_athlete_biography
+type: mongodb-find-one
+source: olympics-mongo
+description: >
+  Fetch the full biography document for one athlete_id from olympic_athlete_biography.
+  Pass athlete_id as the same integer Postgres returns; documents store BSON int (not string).
+  Use after Postgres medal/search tools supply athlete_id, or after mongo_biography_text_search.
+  If this returns nothing for a plausible id, try mongo_biography_text_search with a rare
+  name token or mongo_biographies_by_country for that athlete's NOC—not every athlete_event
+  row has a biography row in this slice.
+database: olympics
+collection: olympic_athlete_biography
+filterPayload: |
+  { "athlete_id": {{json .athlete_id}} }
+filterParams:
+  - name: athlete_id
+    type: integer
+    description: Athlete identifier shared with Postgres athletes table.
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: mongo_biography_text_search
+type: mongodb-aggregate
+source: olympics-mongo
+description: >
+  Search athlete biography documents for a keyword in name, description, or special_notes.
+  Uses an aggregation pipeline: same ``$match`` filter as before, then ``$sample`` (size 25)
+  so returned documents are a random subset of matches—not insertion or name order.
+  Each hit includes athlete_id as a BSON int.
+  Use athlete_id from results with pg_athlete_results or mongo_athlete_biography.
+database: olympics
+collection: olympic_athlete_biography
+readOnly: true
+pipelinePayload: |
+  [
+    {
+      "$match": {
+        "$or": [
+          { "name": { "$regex": {{json .text_fragment}}, "$options": "i" } },
+          { "description": { "$regex": {{json .text_fragment}}, "$options": "i" } },
+          { "special_notes": { "$regex": {{json .text_fragment}}, "$options": "i" } }
+        ]
+      }
+    },
+    { "$sample": { "size": 25 } }
+  ]
+pipelineParams:
+  - name: text_fragment
+    type: string
+    description: Keyword or short phrase to search for (case-insensitive).
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: mongo_event_results_by_edition
+type: mongodb-find
+source: olympics-mongo
+description: >
+  Wide event-result documents for one Olympic edition_id (BSON int in documents; pass the
+  integer from pg_list_games_by_year).
+  Obtain edition_id from pg_list_games_by_year first.
+database: olympics
+collection: olympic_event_results
+limit: 20
+filterPayload: |
+  { "edition_id": {{json .edition_id}} }
+filterParams:
+  - name: edition_id
+    type: integer
+    description: Olympic edition_id matching Postgres olympic_games.edition_id.
+annotations:
+  readOnlyHint: true
+  destructiveHint: false
+---
+kind: tool
+name: mongo_biographies_by_country
+type: mongodb-aggregate
+source: olympics-mongo
+description: >
+  Sample biography documents for athletes with country_noc matching the given NOC.
+  Results are a random subset (``$sample``, size 10), not sorted by name.
+  Resolve country name to noc via pg_search_countries when needed.
+database: olympics
+collection: olympic_athlete_biography
+readOnly: true
+pipelinePayload: |
+  [
+    { "$match": { "country_noc": {{json .country_noc}} } },
+    { "$sample": { "size": 10 } }
+  ]
+pipelineParams:
+  - name: country_noc
+    type: string
+    description: National Olympic Committee code (e.g. USA).
+annotations:
+  readOnlyHint: true
+  destructiveHint: false

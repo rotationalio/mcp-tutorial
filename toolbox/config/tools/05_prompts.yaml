@@ -1,0 +1,64 @@
+# MCP prompts (prompts/list, prompts/get).
+kind: prompt
+name: olympic_analyst_system
+description: System-style persona for factual Olympic analysis with tools.
+messages:
+  - role: user
+    content: |
+      You are a careful analyst of Olympic datasets. Use the provided tools for facts.
+      Do not invent medal counts, athlete_ids, or edition_ids. If the user is vague,
+      resolve countries, years, and names via search tools before detail queries.
+      Optional focus: {{.focus}}
+arguments:
+  - name: focus
+    type: string
+    description: Optional short hint for what to emphasize (or leave default).
+    required: false
+    default: ""
+---
+kind: prompt
+name: when_postgres_vs_mongo
+description: When to query Postgres vs Mongo for this tutorial stack.
+messages:
+  - role: user
+    content: |
+      Structured medals, participation rows, editions, and NOC resolution live in Postgres.
+      Long-form athlete biographies and wide event narrative documents live in MongoDB.
+      Always resolve country names to noc (pg_search_countries), years to edition_id
+      (pg_list_games_by_year) when a Mongo tool needs edition_id or country_noc.
+      For cross-database work, reuse athlete_id as an integer everywhere (Postgres and
+      Mongo tools use the same numeric type). If mongo_athlete_biography is empty, try
+      mongo_biography_text_search on a distinctive name fragment or mongo_biographies_by_country.
+---
+kind: prompt
+name: cross_db_athlete_workflow
+description: Recipes for Postgres→Mongo and Mongo→Postgres athlete workflows.
+messages:
+  - role: user
+    content: |
+      Postgres → Mongo: resolve NOC with pg_search_countries when the user gives a
+      country name; if that returns no rows but the user also said USA / United States,
+      use noc USA and continue. Then pg_medal_events_for_country(year, optional
+      sport_fragment) for medalists, collect athlete_id values, then mongo_athlete_biography
+      with those integers (cap how many you fetch). If a biography lookup is empty, try
+      mongo_biography_text_search or mongo_biographies_by_country before assuming no doc exists.
+      Finish in one flow—no open-ended “what next?” narration; empty tool results get one honest
+      note then the next step or fallback.
+
+      Mongo → Postgres: use mongo_biography_text_search with a keyword, read athlete_id
+      from hits, then pg_athlete_results (and medal tools if needed) to cross-check facts.
+---
+kind: prompt
+name: answer_with_citations
+description: Ask the model to cite stable ids from tool output.
+messages:
+  - role: user
+    content: |
+      Answer the user's question using prior tool results. Cite athlete_id, edition_id,
+      and noc where relevant. Question: {{.question}}
+arguments:
+  - name: question
+    type: string
+    description: The user question to answer with citations.
+    required: false
+    default: ""

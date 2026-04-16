@@ -2,7 +2,8 @@
 Download the Hugging Face dataset CSVs (no authentication) and load:
   - PostgreSQL: countries, olympic_games, athletes, athlete_events
     (CSV has many rows per result_id; athlete_events.athlete_event_id is the row PK.)
-  - MongoDB: olympic_athlete_biography, olympic_event_results
+  - MongoDB: olympic_athlete_biography, olympic_event_results (athlete_id / edition_id /
+    result_id stored as BSON ints so Toolbox filters match Postgres tool arguments).
 
 Successful downloads are cached under data/cache/ (repo root by default; override with
 HF_DATASET_CACHE). docker-compose bind-mounts ./data/cache for the seed service so CSVs
@@ -23,9 +24,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-import psycopg2
-from psycopg2.extras import execute_batch
-from pymongo import MongoClient
+import psycopg2  # type: ignore[import-untyped]
+from psycopg2.extras import execute_batch  # type: ignore[import-untyped]
+from pymongo import MongoClient  # type: ignore[import-not-found]
 
 DATASET_CSV_NAMES = (
     "Olympic_Country_Profiles.csv",
@@ -378,6 +379,37 @@ def _mongo_row_document(row: dict[str, str | None]) -> dict[str, Any]:
     return doc
 
 
+# Toolbox Mongo filters use JSON numbers (BSON int); CSV DictReader gives digit strings.
+_MONGO_INT_FIELDS: dict[str, tuple[str, ...]] = {
+    "olympic_athlete_biography": ("athlete_id",),
+    "olympic_event_results": ("edition_id", "result_id"),
+}
+
+
+def _coerce_mongo_scalar_int(value: Any) -> Any:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        t = value.strip()
+        if t.isdigit():
+            return int(t)
+        if t.startswith("-") and len(t) > 1 and t[1:].isdigit():
+            return int(t)
+    return value
+
+
+def _coerce_mongo_document_for_collection(
+    collection_name: str, doc: dict[str, Any]
+) -> None:
+    keys = _MONGO_INT_FIELDS.get(collection_name)
+    if not keys:
+        return
+    for key in keys:
+        if key not in doc:
+            continue
+        doc[key] = _coerce_mongo_scalar_int(doc[key])
+
+
 def _load_mongo_csv(db, collection_name: str, path: Path) -> None:
     coll = db[collection_name]
     batch: list[dict[str, Any]] = []
@@ -385,7 +417,9 @@ def _load_mongo_csv(db, collection_name: str, path: Path) -> None:
     with path.open(newline="", encoding="utf-8-sig") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            batch.append(_mongo_row_document(row))
+            doc = _mongo_row_document(row)
+            _coerce_mongo_document_for_collection(collection_name, doc)
+            batch.append(doc)
             if len(batch) >= batch_size:
                 coll.insert_many(batch, ordered=False)
                 batch.clear()
