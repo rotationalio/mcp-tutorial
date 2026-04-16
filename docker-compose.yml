@@ -14,7 +14,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "pg_isready -U \"${POSTGRES_USER:-olympics}\" -d \"${POSTGRES_DB:-olympics}\"",
+          'pg_isready -U "${POSTGRES_USER:-olympics}" -d "${POSTGRES_DB:-olympics}"',
         ]
       interval: 3s
       timeout: 5s
@@ -39,6 +39,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.seed
+    volumes:
+      - ./data/cache:/app/data/cache
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"

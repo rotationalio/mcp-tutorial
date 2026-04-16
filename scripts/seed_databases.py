@@ -4,6 +4,11 @@ Download the Hugging Face dataset CSVs (no authentication) and load:
     (CSV has many rows per result_id; athlete_events.athlete_event_id is the row PK.)
   - MongoDB: olympic_athlete_biography, olympic_event_results
 
+Successful downloads are cached under data/cache/ (repo root by default; override with
+HF_DATASET_CACHE). docker-compose bind-mounts ./data/cache for the seed service so CSVs
+persist on the host. Each run still copies CSVs into a temp directory for loading, then
+removes that temp directory.
+
 Olympic_Medal_Tally_History.csv is not downloaded or loaded.
 """
 
@@ -22,15 +27,68 @@ import psycopg2
 from psycopg2.extras import execute_batch
 from pymongo import MongoClient
 
+DATASET_CSV_NAMES = (
+    "Olympic_Country_Profiles.csv",
+    "Olympic_Games_Summary.csv",
+    "Olympic_Athlete_Event_Details.csv",
+    "Olympic_Athlete_Biography.csv",
+    "Olympic_Event_Results.csv",
+)
+
 
 def _hf_base_url() -> str:
-    repo = os.environ.get("HF_DATASET_REPO", "SVeldman/126-years-olympic-results").strip()
+    repo = os.environ.get(
+        "HF_DATASET_REPO", "SVeldman/126-years-olympic-results"
+    ).strip()
     rev = os.environ.get("HF_DATASET_REVISION", "main").strip() or "main"
     return f"https://huggingface.co/datasets/{repo}/resolve/{rev}"
 
 
 def _hf_file_url(filename: str) -> str:
     return f"{_hf_base_url()}/{filename}"
+
+
+def _repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def _dataset_cache_dir() -> Path:
+    raw = os.environ.get("HF_DATASET_CACHE", "").strip()
+    if raw:
+        return Path(raw).expanduser().resolve()
+    return (_repo_root() / "data" / "cache").resolve()
+
+
+def _materialize_csv(name: str, url: str, workdir: Path, cache_dir: Path) -> Path:
+    """Copy from cache or download into workdir, then refresh cache on miss."""
+    work_path = workdir / name
+    cache_path = cache_dir / name
+    if cache_path.is_file():
+        shutil.copy2(cache_path, work_path)
+        print(f"Using cached {name} …")
+    else:
+        print(f"Fetching {name} …")
+        _download(url, work_path)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(work_path, cache_path)
+    return work_path
+
+
+def _dataset_csv_cache_complete(cache_dir: Path) -> bool:
+    return all((cache_dir / n).is_file() for n in DATASET_CSV_NAMES)
+
+
+def _warm_dataset_cache(cache_dir: Path) -> None:
+    """Fill cache_dir when DB seed is skipped but CSVs are missing (e.g. first Docker run)."""
+    if _dataset_csv_cache_complete(cache_dir):
+        return
+    workdir = Path(tempfile.mkdtemp(prefix="hf_olympic_cache_"))
+    try:
+        print(f"Warming dataset cache at {cache_dir} …")
+        for n in DATASET_CSV_NAMES:
+            _materialize_csv(n, _hf_file_url(n), workdir, cache_dir)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 def _download(url: str, dest: Path) -> None:
@@ -110,7 +168,9 @@ def _collect_country_nocs_from_games_details_bio(
     return nocs
 
 
-def _ensure_country_placeholders(conn: psycopg2.extensions.connection, nocs: set[str]) -> None:
+def _ensure_country_placeholders(
+    conn: psycopg2.extensions.connection, nocs: set[str]
+) -> None:
     """Insert (noc, noc) for NOCs referenced by other tables but missing from profiles."""
     rows = [(n, n) for n in sorted(nocs)]
     if not rows:
@@ -191,7 +251,9 @@ def _flush_athletes_biography_batch(
         )
 
 
-def _load_athletes_from_biography(conn: psycopg2.extensions.connection, path: Path) -> set[int]:
+def _load_athletes_from_biography(
+    conn: psycopg2.extensions.connection, path: Path
+) -> set[int]:
     """Load slim athlete rows from biography CSV; returns athlete_ids present in the file."""
     batch: list[tuple[Any, ...]] = []
     batch_size = 2000
@@ -351,35 +413,28 @@ def main() -> None:
     workdir: Path | None = None
 
     try:
+        cache_dir = _dataset_cache_dir()
         if _postgres_seeded(conn):
             print("Database already seeded; skipping.")
+            _warm_dataset_cache(cache_dir)
             return
 
         workdir = Path(tempfile.mkdtemp(prefix="hf_olympic_"))
         base = _hf_base_url()
         print(f"Using dataset base: {base}")
+        print(f"Dataset cache: {cache_dir}")
 
-        country = workdir / "Olympic_Country_Profiles.csv"
-        games = workdir / "Olympic_Games_Summary.csv"
-        details = workdir / "Olympic_Athlete_Event_Details.csv"
-        bio = workdir / "Olympic_Athlete_Biography.csv"
-        events = workdir / "Olympic_Event_Results.csv"
-
-        for path, name in (
-            (country, "Olympic_Country_Profiles.csv"),
-            (games, "Olympic_Games_Summary.csv"),
-            (details, "Olympic_Athlete_Event_Details.csv"),
-            (bio, "Olympic_Athlete_Biography.csv"),
-            (events, "Olympic_Event_Results.csv"),
-        ):
-            url = _hf_file_url(name)
-            print(f"Fetching {name} …")
-            _download(url, path)
+        country, games, details, bio, events = (
+            _materialize_csv(n, _hf_file_url(n), workdir, cache_dir)
+            for n in DATASET_CSV_NAMES
+        )
 
         print("Loading PostgreSQL …")
         try:
             _load_countries(conn, country)
-            extra_nocs = _collect_country_nocs_from_games_details_bio(games, details, bio)
+            extra_nocs = _collect_country_nocs_from_games_details_bio(
+                games, details, bio
+            )
             _ensure_country_placeholders(conn, extra_nocs)
             _load_games_summary(conn, games)
             bio_ids = _load_athletes_from_biography(conn, bio)
