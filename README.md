@@ -1,6 +1,6 @@
 # Real World MCP Tutorial: Augmenting Model Context from Existing Data Sources
 
-Hands-on **learning and demo** material: you run a small Olympic data stack in Docker, expose it through **[Google MCP Toolbox for Databases](https://mcp-toolbox.dev/documentation/introduction/)**, then drive the same tools from a **Python agent** (OpenRouter) and a **notebook**—so you can see the same ideas in the UI, in logs, and in code.
+Hands-on **learning and demo** material: you run a small Olympic data stack in Docker, expose it through **[Google MCP Toolbox for Databases](https://mcp-toolbox.dev/documentation/introduction/)**, then drive the same tools from a **Python agent** (OpenRouter) and a **demo notebook**—so you can see the same ideas in the UI, in logs, and in code.
 
 ---
 
@@ -65,9 +65,17 @@ python scripts/run_agent_demo.py
 
 This runs two **cross-database** questions against OpenRouter with Toolbox’s **`combined`** toolset. Watch **INFO** lines for when each chat request and each tool starts and finishes—handy if something feels slow.
 
-### 5. Same story in the notebook
+### 5. Walk through the demo notebook
 
-Open [`notebooks/simple_tool_calls.ipynb`](notebooks/simple_tool_calls.ipynb) with the **same venv as the Jupyter kernel**, ``.env`` loaded, and Toolbox still running. Step through the two prompts at your own pace.
+Open [`notebooks/demo_mcp_toolbox.ipynb`](notebooks/demo_mcp_toolbox.ipynb) with the **same venv as the Jupyter kernel** (step **3**), **Docker still running** (step **1**), and **`OPENROUTER_API_KEY`** set (e.g. in repo-root ``.env``). Run cells **in order** from the top.
+
+That notebook is the **teaching path** alongside the CLI demo:
+
+- **Compose + YAML** — short explanation of how Toolbox is wired in [`docker-compose.yml`](docker-compose.yml) and how merged files under [`toolbox/config/tools/`](toolbox/config/tools/) define tools and the **`combined`** toolset.
+- **Tool-calling loop in cells** — imports, mapping Toolbox tools to OpenAI ``tools=``, OpenRouter client, one completion at a time, then a full loop—implemented **in the notebook** as small steps (same ideas as ``run_chat_with_tools`` in ``mcp_tutorial.agent``, not a re-export of that function).
+- **Two cross-database runs** — Example A (relational facts first, bios second) and Example B (biography search first, Postgres cross-check). Prompts for A/B are defined next to those cells; Example B uses a **notebook-only** simplified prompt (one random sport phrase, no hit-index nudge). The terminal demo still uses ``mcp_tutorial.prompts`` / ``build_prompt_b()`` for its second prompt.
+
+For a quicker notebook that only calls ``run_chat_with_tools``, see [`notebooks/simple_tool_calls.ipynb`](notebooks/simple_tool_calls.ipynb).
 
 ---
 
@@ -80,6 +88,8 @@ Open [`notebooks/simple_tool_calls.ipynb`](notebooks/simple_tool_calls.ipynb) wi
 | [`toolbox/config/tools/`](toolbox/config/tools/) | Merged YAML: sources, SQL/Mongo tools, toolsets (`combined`, `postgres_only`, `mongo_only`), prompts. Numbered filenames set merge order. |
 | [`src/mcp_tutorial/`](src/mcp_tutorial/) | Tutorial package **`mcp_tutorial`**: **`run_chat_with_tools`**, **`Settings`**. Installed with ``pip install -e .`` in step **3**. |
 | [`scripts/run_agent_demo.py`](scripts/run_agent_demo.py) | Terminal walkthrough of two prompts. |
+| [`notebooks/demo_mcp_toolbox.ipynb`](notebooks/demo_mcp_toolbox.ipynb) | Demo notebook: Compose/YAML context, step-by-step OpenRouter + Toolbox loop in cells, two cross-database examples. |
+| [`notebooks/simple_tool_calls.ipynb`](notebooks/simple_tool_calls.ipynb) | Minimal notebook: loads settings and calls ``run_chat_with_tools`` for the same two prompts. |
 | [`scripts/seed_databases.py`](scripts/seed_databases.py) | Logic the **seed** container uses to fill the DBs. |
 | [`db/postgres/`](db/postgres/), [`db/mongo/`](db/mongo/) | Schema and init helpers for the containers. |
 
