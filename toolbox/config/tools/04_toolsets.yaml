@@ -1,0 +1,30 @@
+# Toolsets (merge with same-named toolsets if split further later).
+kind: toolset
+name: postgres_only
+tools:
+  - pg_list_games_by_year
+  - pg_search_countries
+  - pg_search_athletes_by_name
+  - pg_medal_events_for_country
+  - pg_athlete_results
+---
+kind: toolset
+name: mongo_only
+tools:
+  - mongo_athlete_biography
+  - mongo_biography_text_search
+  - mongo_event_results_by_edition
+  - mongo_biographies_by_country
+---
+kind: toolset
+name: combined
+tools:
+  - pg_list_games_by_year
+  - pg_search_countries
+  - pg_search_athletes_by_name
+  - pg_medal_events_for_country
+  - pg_athlete_results
+  - mongo_athlete_biography
+  - mongo_biography_text_search
+  - mongo_event_results_by_edition
+  - mongo_biographies_by_country
