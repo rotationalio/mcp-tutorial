@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-tutorial"
+version = "0.1.0"
+description = "Hands-on MCP Toolbox + OpenRouter tutorial (Olympic sample data)."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "toolbox-core>=1.0.0,<2",
+    "openai>=1.40.0",
+    "python-dotenv>=1.0.0",
+    "ipykernel>=6.29.0",
+    "jupyter>=1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mcp_tutorial = ["py.typed"]
