@@ -1,6 +1,6 @@
-# mcp-tutorial
+# Real World MCP Tutorial: Augmenting Model Context from Existing Data Sources
 
-Hands-on **learning and demo** material for Benjamin's AMLC tutorial on MCP servers: you run a small Olympic data stack in Docker, expose it through **[Google MCP Toolbox for Databases](https://mcp-toolbox.dev/documentation/introduction/)**, then drive the same tools from a **Python agent** (OpenRouter) and a **notebook**—so you can see the same ideas in the UI, in logs, and in code.
+Hands-on **learning and demo** material: you run a small Olympic data stack in Docker, expose it through **[Google MCP Toolbox for Databases](https://mcp-toolbox.dev/documentation/introduction/)**, then drive the same tools from a **Python agent** (OpenRouter) and a **notebook**—so you can see the same ideas in the UI, in logs, and in code.
 
 ---
 
