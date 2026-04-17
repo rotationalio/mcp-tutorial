@@ -212,3 +212,6 @@ __marimo__/
 !/data/cache/
 /data/cache/*
 !/data/cache/.gitignore
+
+# macOS metadata file that should not be committed
+.DS_Store
