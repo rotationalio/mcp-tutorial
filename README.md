@@ -102,3 +102,5 @@ For a quicker notebook that only calls ``run_chat_with_tools``, see [`notebooks/
 **Other OpenAI-compatible APIs:** set `OPENROUTER_BASE_URL` and `OPENROUTER_MODEL` instead of OpenRouter defaults (see `.env.example`).
 
 After edits to [`scripts/seed_databases.py`](scripts/seed_databases.py), rebuild the seed image when re-running seed: `docker compose run --build --rm seed`.
+
+**Official docs:** [MCP Toolbox for Databases](https://mcp-toolbox.dev/documentation/introduction/) (architecture and features)  |  [Toolbox YAML configuration](https://mcp-toolbox.dev/documentation/configure.md)  |  [MCP quickstart](https://mcp-toolbox.dev/documentation/getting-started/mcp_quickstart/)  |  [Python `toolbox-core` SDK](https://googleapis.github.io/genai-toolbox/sdks/python-sdk/core/) ([sync usage](https://googleapis.github.io/genai-toolbox/sdks/python-sdk/core/#synchronous-usage))  |  [OpenRouter API](https://openrouter.ai/docs/quickstart)  |  [OpenAI function calling (tools)](https://platform.openai.com/docs/guides/function-calling)  |  [OpenAI Python library](https://github.com/openai/openai-python).
